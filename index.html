@@ -199,6 +199,42 @@
   .revealed .replay-btn{ animation:fadeUp .9s ease forwards; animation-delay:3.2s; pointer-events:auto; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateX(-50%) translateY(10px) } to{ opacity:1; transform:translateX(-50%) translateY(0) } }
 
+  /* ---------- música ---------- */
+  #ytPlayer{
+    position:fixed; left:0; bottom:0; width:1px; height:1px;
+    opacity:0; overflow:hidden; pointer-events:none; z-index:1;
+  }
+  .music-btn{
+    position:fixed; z-index:9;
+    right:calc(14px + env(safe-area-inset-right));
+    bottom:calc(14px + env(safe-area-inset-bottom));
+    width:46px; height:46px; padding:0;
+    display:flex; align-items:center; justify-content:center; gap:3px;
+    border-radius:50%; cursor:pointer;
+    border:1px solid rgba(255,247,214,.24);
+    background:rgba(255,255,255,.06);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    opacity:0; pointer-events:none;
+    transition:background .25s, border-color .25s, transform .25s;
+  }
+  .music-btn:hover{ transform:translateY(-2px); background:rgba(255,210,63,.14); }
+  .revealed .music-btn{ animation:fadeUpBtn .9s ease forwards; animation-delay:3.2s; pointer-events:auto; }
+  @keyframes fadeUpBtn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:translateY(0) } }
+  .music-btn .bar{
+    display:block; width:3px; border-radius:3px;
+    background:rgba(255,247,214,.55);
+    height:8px;
+    transition:background .25s;
+  }
+  .music-btn .bar:nth-child(2){ height:14px; }
+  .music-btn .bar:nth-child(3){ height:10px; }
+  .music-btn.on{ border-color:rgba(255,210,63,.55); background:rgba(255,210,63,.16); }
+  .music-btn.on .bar{ background:var(--gold); animation:eq .9s ease-in-out infinite; }
+  .music-btn.on .bar:nth-child(1){ animation-delay:0s; }
+  .music-btn.on .bar:nth-child(2){ animation-delay:.18s; }
+  .music-btn.on .bar:nth-child(3){ animation-delay:.36s; }
+  @keyframes eq{ 0%,100%{ transform:scaleY(.5) } 50%{ transform:scaleY(1.75) } }
+
   @media (max-width:520px){
     .stage{ padding:3vh 0 4vh; gap:1vh; }
     .message .line1{ font-size:clamp(1.5rem, 7vw, 2.4rem); }
@@ -337,6 +373,11 @@
 </div>
 
 <button class="replay-btn" id="replayBtn" type="button">&#8635; Repetir</button>
+
+<div id="ytPlayer" aria-hidden="true"></div>
+<button class="music-btn" id="musicBtn" type="button" aria-label="Activar o desactivar la música" aria-pressed="false">
+  <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+</button>
 
 <script>
 (function(){
@@ -657,7 +698,72 @@
   }, 340);
 
   /* ============================================================
-     3. Interacción
+     3. Música de fondo (YouTube IFrame API)
+     ============================================================ */
+  var VIDEO_ID = 'luZz40sD0qQ';
+  var ytPlayer = null;
+  var ytReady = false;
+  var musicWanted = false;
+  var musicBtn = document.getElementById('musicBtn');
+
+  function setBtn(state){
+    if (!musicBtn) return;
+    musicBtn.classList.toggle('on', !!state);
+    musicBtn.setAttribute('aria-pressed', state ? 'true' : 'false');
+  }
+
+  function playMusic(){
+    musicWanted = true;
+    if (ytReady && ytPlayer && ytPlayer.playVideo){
+      ytPlayer.playVideo();
+      setBtn(true);
+      setTimeout(function(){ if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(55); }, 900);
+    }
+  }
+
+  function pauseMusic(){
+    musicWanted = false;
+    if (ytReady && ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+    setBtn(false);
+  }
+
+  window.onYouTubeIframeAPIReady = function(){
+    ytPlayer = new window.YT.Player('ytPlayer', {
+      videoId: VIDEO_ID,
+      playerVars: {
+        autoplay: 0, controls: 0, disablekb: 1, fs: 0,
+        loop: 1, playlist: VIDEO_ID, modestbranding: 1,
+        playsinline: 1, rel: 0, iv_load_policy: 3
+      },
+      events: {
+        onReady: function(){
+          ytReady = true;
+          if (musicWanted) playMusic();
+        },
+        onStateChange: function(e){
+          if (e.data === window.YT.PlayerState.PLAYING) setBtn(true);
+          else if (e.data === window.YT.PlayerState.PAUSED || e.data === window.YT.PlayerState.ENDED) setBtn(false);
+        }
+      }
+    });
+  };
+
+  (function loadYT(){
+    var s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.async = true;
+    document.head.appendChild(s);
+  })();
+
+  if (musicBtn){
+    musicBtn.addEventListener('click', function(){
+      if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 1) pauseMusic();
+      else playMusic();
+    });
+  }
+
+  /* ============================================================
+     4. Interacción
      ============================================================ */
   var revealed = false;
 
@@ -665,6 +771,7 @@
     if (revealed) return;
     revealed = true;
     document.body.classList.add('revealed');
+    playMusic();
 
     var cx = W / 2;
     var cy = H * 0.55;
